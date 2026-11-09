@@ -10,7 +10,7 @@ An on-call engineer pastes an alert or error log. The agent recalls similar past
 
 ## The Problem
 
-When production breaks, the first question is always: *"Have we seen this before, and how did we fix it?"*
+When production breaks the first question is always: *"Have we seen this before, and how did we fix it?"*
 
 The answer usually lives scattered across archived Slack threads, buried post-mortem docs, or in the head of whoever was on call six months ago. The same incidents recur, and the real root cause is often specific to your team's internal architecture—something a stateless LLM has no way of guessing:
 
