@@ -392,7 +392,7 @@ Place captured screenshots in `docs/screenshots/`:
 
 ## Known Limitations
 
-- **Hindsight API Key Scopes**: Vectorize issues dedicated keys for Hindsight Inference (`hsk_...` at `https://inference.hindsight.vectorize.io`) powered by `hs-decide-1-flash` and `hs-embed-1`, and separate keys for the Cloud Memory Banks dashboard (`ui.hindsight.vectorize.io`). The agent natively detects which endpoint is configured and selects the appropriate integration.
+- **Hindsight API Key Scopes**: Vectorize issues dedicated keys for Hindsight Inference (`hsk_...` at `https://inference.hindsight.vectorize.io`) it is powered by `hs-decide-1-flash` and `hs-embed-1`, and separate keys for the Cloud Memory Banks dashboard (`ui.hindsight.vectorize.io`). The agent natively detects which endpoint is configured and selects the appropriate integration.
 - **Heuristic Evaluation Judge**: The automated demo uses keyword overlap between the predicted verdict and ground truth as a proxy. Real incident evaluation requires human engineer judgment.
 - **Retain Processing Latency**: Hindsight extracts facts and resolves entities during retain. While synchronous retain ensures immediate recall availability, high-volume ingest in production may benefit from asynchronous retain (`HINDSIGHT_RETAIN_ASYNC=true`).
 - **In-Memory UI Counters**: Live dashboard stats and unconfirmed pending triage sessions reside in FastAPI process memory and reset when the server restarts. Persistent memory itself lives durably in Hindsight.
