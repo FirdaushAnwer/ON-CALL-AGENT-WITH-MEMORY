@@ -1,0 +1,12 @@
+.env
+.venv/
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+node_modules/
+.DS_Store
+docs/learning_curve.json
+docs/verification_10_results.json
+data/hindsight_inference_store.json
+*.log

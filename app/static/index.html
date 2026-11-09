@@ -1,0 +1,264 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>On-call Memory Agent</title>
+<style>
+  :root {
+    --bg:#0f1420; --panel:#171e2e; --panel2:#1e2740; --line:#2a3552; --text:#e6ebf5; --muted:#8d9bb8;
+    --accent:#5aa2ff; --good:#3ecf8e; --bad:#ff6b6b; --warn:#f5b84b; --mem:#b58cff;
+    font-size: 17px;
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
+  header { padding:18px 28px; border-bottom:1px solid var(--line); display:flex; align-items:center; gap:16px; flex-wrap:wrap; }
+  header h1 { font-size:1.2rem; margin:0; }
+  header .sub { color:var(--muted); font-size:.85rem; }
+  .toggle { margin-left:auto; display:flex; align-items:center; gap:10px; background:var(--panel); border:1px solid var(--line); padding:8px 14px; border-radius:999px; cursor:pointer; user-select:none; }
+  .toggle .dot { width:12px; height:12px; border-radius:50%; background:var(--mem); }
+  .toggle.off .dot { background:var(--muted); }
+  main { display:grid; grid-template-columns: 1fr 1.2fr 1fr; gap:18px; padding:18px 28px; }
+  @media (max-width: 1100px) { main { grid-template-columns:1fr; } }
+  section { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:16px; min-width:0; }
+  h2 { font-size:.8rem; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); margin:0 0 12px; }
+  textarea, input[type=text] { width:100%; background:var(--panel2); color:var(--text); border:1px solid var(--line); border-radius:8px; padding:10px; font:inherit; font-size:.85rem; }
+  textarea { min-height:130px; resize:vertical; font-family: ui-monospace, Menlo, Consolas, monospace; }
+  button { background:var(--accent); color:#06121f; border:0; border-radius:8px; padding:9px 14px; font:inherit; font-weight:600; cursor:pointer; }
+  button.secondary { background:var(--panel2); color:var(--text); border:1px solid var(--line); font-weight:500; }
+  button.good { background:var(--good); } button.bad { background:var(--bad); }
+  button:disabled { opacity:.5; cursor:wait; }
+  .row { display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; align-items:center; }
+  .chips button { font-size:.75rem; padding:5px 9px; }
+  label.small { font-size:.8rem; color:var(--muted); display:flex; gap:6px; align-items:center; }
+  .verdict .field { margin-bottom:12px; }
+  .verdict .k { font-size:.72rem; color:var(--muted); text-transform:uppercase; letter-spacing:.06em; }
+  .verdict .v { font-size:.95rem; line-height:1.4; }
+  .conf { height:6px; background:var(--panel2); border-radius:4px; overflow:hidden; margin-top:4px; }
+  .conf > div { height:100%; background:var(--accent); }
+  .mem { border-left:3px solid var(--mem); background:var(--panel2); padding:10px 12px; border-radius:0 8px 8px 0; margin-bottom:10px; font-size:.82rem; line-height:1.45; white-space:pre-wrap; }
+  .mem-badge { display:inline-block; font-size:.68rem; font-weight:700; padding:1px 6px; border-radius:4px; margin-right:6px; text-transform:uppercase; }
+  .mem-badge.cause { background:rgba(62,207,142,.15); color:var(--good); border:1px solid rgba(62,207,142,.3); }
+  .mem-badge.fix { background:rgba(94,189,255,.15); color:var(--accent); border:1px solid rgba(94,189,255,.3); }
+  .mem-badge.avoid { background:rgba(255,107,107,.15); color:var(--bad); border:1px solid rgba(255,107,107,.3); }
+  .empty { color:var(--muted); font-size:.85rem; }
+  .warn { color:var(--warn); font-size:.78rem; margin-top:6px; }
+  .tag { display:inline-block; font-size:.7rem; padding:2px 8px; border-radius:999px; background:var(--panel2); border:1px solid var(--line); color:var(--muted); }
+  .tag.mem { color:var(--mem); border-color:var(--mem); background:transparent; margin:0; padding:2px 8px; border-left-width:1px; border-radius:999px; }
+  .counters { display:flex; gap:12px; margin-top:12px; }
+  .counter { flex:1; background:var(--panel2); border-radius:8px; padding:10px; text-align:center; }
+  .counter b { display:block; font-size:1.4rem; }
+  .counter span { font-size:.7rem; color:var(--muted); text-transform:uppercase; letter-spacing:.05em; }
+  canvas { width:100%; height:240px; background:var(--panel2); border-radius:8px; }
+  .legend { display:flex; gap:16px; font-size:.78rem; color:var(--muted); margin-top:8px; }
+  .legend i { display:inline-block; width:10px; height:10px; border-radius:2px; margin-right:6px; }
+  table { width:100%; border-collapse:collapse; font-size:.78rem; margin-top:10px; }
+  td, th { padding:4px 6px; text-align:left; border-bottom:1px solid var(--line); }
+  td.y { color:var(--good); } td.n { color:var(--bad); }
+</style>
+</head>
+<body>
+<header>
+  <h1>On-call Memory Agent</h1>
+  <span class="sub">Incident triage that learns from engineer corrections, powered by Hindsight memory</span>
+  <div class="toggle" id="toggle" title="Turn Hindsight recall on or off for the next triage"><span class="dot"></span><span id="toggleLabel">Memory ON</span></div>
+</header>
+
+<main>
+  <section>
+    <h2>1. Alert</h2>
+    <input type="text" id="service" placeholder="Service (optional), e.g. billing-api" style="margin-bottom:8px">
+    <textarea id="alert" placeholder="Paste an alert or error log here"></textarea>
+    <div class="row chips" id="samples"></div>
+    <div class="row"><button id="runBtn">Run triage</button><span id="runStatus" class="empty"></span></div>
+  </section>
+
+  <section class="verdict">
+    <h2>2. Verdict</h2>
+    <div id="verdict" class="empty">Run a triage to see the agent's answer.</div>
+    <div id="feedback" style="display:none">
+      <h2 style="margin-top:18px">3. Engineer feedback</h2>
+      <input type="text" id="actualCause" placeholder="Actual root cause (optional)" style="margin-bottom:8px">
+      <input type="text" id="actualFix" placeholder="Fix that worked (optional)" style="margin-bottom:8px">
+      <label class="small"><input type="checkbox" id="fixFailed"> The suggested fix did not work</label>
+      <div class="row">
+        <button class="good" id="okBtn">Correct</button>
+        <button class="bad" id="badBtn">Wrong</button>
+        <span id="fbStatus" class="empty"></span>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Memories used (recalled from Hindsight)</h2>
+    <div id="memories" class="empty">Nothing recalled yet.</div>
+  </section>
+
+  <section style="grid-column: 1 / -1">
+    <h2>Learning curve: cumulative accuracy over rounds</h2>
+    <canvas id="chart" width="1200" height="260"></canvas>
+    <div class="legend"><span><i style="background:var(--mem)"></i>Memory ON</span><span><i style="background:var(--muted)"></i>Memory OFF (baseline)</span></div>
+    <div class="counters">
+      <div class="counter"><b id="cRecalled">0</b><span>memories recalled</span></div>
+      <div class="counter"><b id="cRetained">0</b><span>corrections retained</span></div>
+      <div class="counter"><b id="cRoundsMem">0</b><span>rounds, memory on</span></div>
+      <div class="counter"><b id="cRoundsBase">0</b><span>rounds, memory off</span></div>
+    </div>
+    <div class="row" style="flex-wrap:wrap;gap:10px;align-items:center">
+      <button id="demoBtn">Run demo sequence</button>
+      <label style="display:inline-flex;align-items:center;gap:6px;font-size:0.85rem;cursor:pointer;color:var(--text)"><input type="checkbox" id="warmStart" checked> Warm Start (100% green demo)</label>
+      <button class="secondary" id="seedBtn" title="Pre-load 8 historical incident post-mortems into memory">Pre-seed memory</button>
+      <button class="secondary" id="resetBtn">Reset stats</button>
+      <button class="secondary" id="clearMemBtn" style="color:var(--bad)" title="Clear all stored memories in this bank">Clear memory</button>
+      <span id="demoStatus" class="empty">Replays recurring incidents with memory on and off side by side.</span>
+    </div>
+    <div id="demoTable"></div>
+  </section>
+</main>
+
+<script>
+const $ = id => document.getElementById(id);
+let memoryOn = true, current = null;
+
+async function api(path, opts) {
+  const r = await fetch(path, opts);
+  if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || r.statusText);
+  return r.json();
+}
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+$('toggle').onclick = () => {
+  memoryOn = !memoryOn;
+  $('toggle').classList.toggle('off', !memoryOn);
+  $('toggleLabel').textContent = memoryOn ? 'Memory ON' : 'Memory OFF';
+};
+
+api('/samples').then(list => {
+  $('samples').innerHTML = list.map((s, i) => `<button class="secondary" data-i="${i}">${esc(s.pattern.replaceAll('_',' '))}</button>`).join('');
+  $('samples').onclick = e => {
+    const b = e.target.closest('button'); if (!b) return;
+    const s = list[+b.dataset.i]; $('alert').value = s.alert_text; $('service').value = s.service;
+  };
+});
+
+$('runBtn').onclick = async () => {
+  const alert_text = $('alert').value.trim();
+  if (alert_text.length < 3) { $('runStatus').textContent = 'Paste an alert first.'; return; }
+  $('runBtn').disabled = true; $('runStatus').textContent = memoryOn ? 'Recalling and thinking...' : 'Thinking (no memory)...';
+  try {
+    current = await api('/triage', { method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ alert_text, service: $('service').value || null, use_memory: memoryOn }) });
+    renderVerdict(current); $('runStatus').textContent = '';
+  } catch (e) { $('runStatus').textContent = 'Error: ' + e.message; }
+  $('runBtn').disabled = false;
+};
+
+function formatMem(text) {
+  let h = esc(text);
+  h = h.replace(/CONFIRMED ROOT CAUSE:\s*([^\n]+)/g, '<div style="margin:5px 0"><span class="mem-badge cause">Confirmed Cause</span><b style="color:var(--good)">$1</b></div>');
+  h = h.replace(/FIX THAT WORKED:\s*([^\n]+)/g, '<div style="margin:5px 0"><span class="mem-badge fix">Fix That Worked</span>$1</div>');
+  h = h.replace(/FIX THAT DID NOT WORK[^:]*:\s*([^\n]+)/g, '<div style="margin:5px 0"><span class="mem-badge avoid">Avoided Failed Fix</span><span style="color:var(--bad)">$1</span></div>');
+  return `<div class="mem">${h}</div>`;
+}
+
+function renderVerdict(v) {
+  const warn = v.warnings.length ? `<div class="warn">${v.warnings.map(esc).join('<br>')}</div>` : '';
+  $('verdict').className = '';
+  $('verdict').innerHTML = `
+    <div class="field"><div class="k">Incident</div><div class="v">${esc(v.incident_id)} <span class="tag ${v.memory_enabled ? 'mem' : ''}">${v.memory_enabled ? 'memory on' : 'memory off'}</span>${v.degraded ? ' <span class="tag">degraded</span>' : ''}</div></div>
+    <div class="field"><div class="k">Likely root cause</div><div class="v">${esc(v.root_cause)}</div></div>
+    <div class="field"><div class="k">Suggested fix</div><div class="v">${esc(v.suggested_fix)}</div></div>
+    <div class="field"><div class="k">Reasoning</div><div class="v">${esc(v.reasoning)}</div></div>
+    <div class="field"><div class="k">Confidence ${(v.confidence*100).toFixed(0)}%</div><div class="conf"><div style="width:${v.confidence*100}%"></div></div></div>
+    ${warn}`;
+  $('feedback').style.display = 'block'; $('fbStatus').textContent = '';
+  $('memories').className = v.memories_used.length ? '' : 'empty';
+  $('memories').innerHTML = v.memories_used.length
+    ? v.memories_used.map(formatMem).join('')
+    : (v.memory_enabled ? 'Memory is on, but nothing relevant was recalled yet. Give feedback so the agent can learn.' : 'Memory is off for this run.');
+}
+
+async function sendFeedback(correct) {
+  if (!current) return;
+  $('fbStatus').textContent = 'Saving to Hindsight...';
+  try {
+    const r = await api('/feedback', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({
+      incident_id: current.incident_id, correct,
+      actual_cause: $('actualCause').value || null, actual_fix: $('actualFix').value || null,
+      suggested_fix_failed: $('fixFailed').checked,
+      tried_fix_failed: $('fixFailed').checked }) });
+    $('fbStatus').textContent = r.retained ? 'Retained. The agent will remember this.' : 'Recorded (nothing retained in memory-off mode or retain failed).';
+    refreshStats();
+  } catch (e) { $('fbStatus').textContent = 'Error: ' + e.message; }
+}
+$('okBtn').onclick = () => sendFeedback(true);
+$('badBtn').onclick = () => sendFeedback(false);
+
+function drawChart(series) {
+  const c = $('chart'), g = c.getContext('2d'), W = c.width, H = c.height, pad = 40;
+  g.clearRect(0, 0, W, H); g.font = '13px sans-serif'; g.fillStyle = '#8d9bb8'; g.strokeStyle = '#2a3552';
+  for (let i = 0; i <= 4; i++) {
+    const y = pad/2 + (H - pad*1.5) * (1 - i/4);
+    g.beginPath(); g.moveTo(pad, y); g.lineTo(W - 10, y); g.stroke(); g.fillText((i*25) + '%', 4, y + 4);
+  }
+  const n = Math.max(series.memory.length, series.baseline.length, 2);
+  const line = (data, color) => {
+    if (!data.length) return;
+    g.strokeStyle = color; g.lineWidth = 3; g.beginPath();
+    data.forEach((v, i) => {
+      const x = pad + (W - pad - 10) * (i / (n - 1)), y = pad/2 + (H - pad*1.5) * (1 - v);
+      i ? g.lineTo(x, y) : g.moveTo(x, y);
+    }); g.stroke();
+    data.forEach((v, i) => { const x = pad + (W - pad - 10) * (i / (n - 1)), y = pad/2 + (H - pad*1.5) * (1 - v); g.fillStyle = color; g.beginPath(); g.arc(x, y, 3.5, 0, 7); g.fill(); });
+  };
+  line(series.baseline, '#8d9bb8'); line(series.memory, '#b58cff');
+  g.fillStyle = '#8d9bb8'; g.fillText('round', W/2 - 15, H - 6);
+}
+
+async function refreshStats() {
+  const s = await api('/stats');
+  drawChart(s.cumulative_accuracy);
+  $('cRecalled').textContent = s.memories_recalled; $('cRetained').textContent = s.corrections_retained;
+  $('cRoundsMem').textContent = s.rounds.memory; $('cRoundsBase').textContent = s.rounds.baseline;
+}
+$('resetBtn').onclick = async () => { await api('/reset-stats', { method:'POST' }); refreshStats(); $('demoTable').innerHTML = ''; };
+
+$('seedBtn').onclick = async () => {
+  $('seedBtn').disabled = true; $('demoStatus').textContent = 'Pre-seeding confirmed historical memories...';
+  try {
+    const res = await api('/seed-memory', { method:'POST' });
+    $('demoStatus').textContent = `Seeded ${res.count} historical post-mortems into bank '${res.bank}'.`;
+    refreshStats();
+  } catch (e) { $('demoStatus').textContent = 'Error: ' + e.message; }
+  $('seedBtn').disabled = false;
+};
+
+$('clearMemBtn').onclick = async () => {
+  if (!confirm('Clear all stored memories in this bank?')) return;
+  try {
+    await api('/reset-memory', { method:'POST' });
+    $('demoStatus').textContent = 'Memory bank cleared.';
+    refreshStats();
+    $('demoTable').innerHTML = '';
+  } catch (e) { $('demoStatus').textContent = 'Error: ' + e.message; }
+};
+
+let timer = null;
+$('demoBtn').onclick = async () => {
+  $('demoBtn').disabled = true; $('demoStatus').textContent = 'Starting demo...';
+  const warm = $('warmStart').checked;
+  await api(`/demo/run?waves=3&warm_start=${warm}`, { method:'POST' });
+  timer = setInterval(pollDemo, 1500);
+};
+async function pollDemo() {
+  const d = await api('/demo/status');
+  $('demoStatus').textContent = d.state === 'running' ? `Running: ${d.rounds.length}/${d.total} rounds` : d.state === 'error' ? 'Error: ' + d.error : `Done: ${d.rounds.length} rounds`;
+  refreshStats();
+  $('demoTable').innerHTML = d.rounds.length ? `<table><tr><th>#</th><th>Pattern</th><th>Recalled</th><th>Memory OFF</th><th>Memory ON</th></tr>` +
+    d.rounds.map(r => `<tr><td>${r.round}</td><td>${esc(r.pattern)}</td><td>${r.memories_recalled}</td><td class="${r.baseline_correct ? 'y' : 'n'}">${r.baseline_correct ? 'match' : 'miss'}</td><td class="${r.memory_correct ? 'y' : 'n'}">${r.memory_correct ? 'match' : 'miss'}</td></tr>`).join('') + '</table>' : '';
+  if (d.state !== 'running') { clearInterval(timer); $('demoBtn').disabled = false; }
+}
+refreshStats();
+</script>
+</body>
+</html>
