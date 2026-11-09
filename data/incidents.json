@@ -7,7 +7,7 @@
     "severity": "SEV3",
     "raw_alert": "2026-06-08T03:47:06Z ERROR [billing-api] HikariPool-1 - Connection is not available, request timed out after 30000ms (total=50, active=50, idle=0, waiting=46)",
     "true_root_cause": "The nightly invoice-reconciliation cron (recon-batch) runs without a statement timeout and holds database connections open past 02:00 UTC.",
-    "fix_that_worked": "Terminate the recon-batch sessions with pg_terminate_backend and set statement_timeout=60s on the recon-batch database role.",
+    "fix_that_worked": "Identify and Terminate the recon-batch sessions with pg_terminate_backend and set statement_timeout=60s on the recon-batch database role.",
     "failed_fix": "Increasing the connection pool max size from 50 to 100 (Postgres then hit max_connections and everything got slower)."
   },
   {
