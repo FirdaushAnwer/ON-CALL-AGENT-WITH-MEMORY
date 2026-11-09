@@ -18,7 +18,7 @@ The answer usually lives scattered across archived Slack threads, buried post-mo
 - Increasing the connection pool from 50 to 100 was tried in the past, hit database connection limits, and worsened the outage.
 - A stateless AI assistant forgets everything between sessions: it will repeatedly suggest increasing the pool size, repeating the exact fix that failed previously.
 
-## What It Does
+## What Is This
 
 | Without Memory (Baseline) | With Hindsight Memory |
 |---|---|
